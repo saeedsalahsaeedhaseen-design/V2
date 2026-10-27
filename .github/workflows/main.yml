@@ -15,11 +15,27 @@ jobs:
 
       - name: فك ضغط المشروع وإصلاح الإعدادات
         run: |
+          # فك ضغط الملف المضغوط
           unzip -q -o "*.zip"
+          
+          # إذا تم فك الضغط داخل مجلد فرعي، ننتقل إليه تلقائياً
+          EXTRACTED_DIR=$(ls -d */ | grep -vE '^\.github/' | head -n 1)
+          if [ -d "$EXTRACTED_DIR" ]; then
+            cd "$EXTRACTED_DIR"
+          fi
+          
+          # إصلاح الإعدادات وتعديل الملفات داخل المشروع
           if [ -f ".env.example" ]; then cp .env.example .env; else touch .env; fi
-          sed -i '/signingConfigs.getByName("debugConfig")/d' app/build.gradle.kts
-          sed -i '/kotlin.compiler.execution.strategy/d' gradle.properties
-          sed -i '/org.gradle.configuration-cache/d' gradle.properties
+          if [ -f "app/build.gradle.kts" ]; then
+            sed -i '/signingConfigs.getByName("debugConfig")/d' app/build.gradle.kts
+          fi
+          if [ -f "gradle.properties" ]; then
+            sed -i '/kotlin.compiler.execution.strategy/d' gradle.properties
+            sed -i '/org.gradle.configuration-cache/d' gradle.properties
+          fi
+          
+          # حفظ مسار المشروع للخطوات القادمة
+          echo "PROJECT_DIR=$(pwd)" >> $GITHUB_ENV
 
       - name: إعداد Java 21
         uses: actions/setup-java@v4
@@ -33,11 +49,13 @@ jobs:
           gradle-version: '9.3.1'
 
       - name: بناء ملف الـ APK
-        run: gradle assembleDebug --no-daemon --no-configuration-cache
+        run: |
+          cd ${{ env.PROJECT_DIR }}
+          gradle assembleDebug --no-daemon --no-configuration-cache
 
       - name: رفع ملف الـ APK للتحميل
         uses: actions/upload-artifact@v4
         with:
           name: Barq-P2P-5GHz-APK
-          path: app/build/outputs/apk/debug/*.apk
+          path: '**/build/outputs/apk/debug/*.apk'
           
